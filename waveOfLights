@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flashlight Circular Motion</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #000;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    canvas {
+      border: 1px solid #fff;
+    }
+
+    .controls {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .controls label {
+      display: block;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+<canvas id="visualizer" width="800" height="400"></canvas>
+
+<div class="controls">
+  <label>
+    BPM:
+    <input type="range" id="bpm-slider" min="30" max="200" value="120">
+    <span id="bpm-display">120</span>
+  </label>
+  <label>
+    Flashlight Amount:
+    <input type="range" id="flashlight-slider" min="1" max="50" value="10">
+    <span id="flashlight-display">10</span>
+  </label>
+</div>
+
+<script>
+  const canvas = document.getElementById('visualizer');
+  const ctx = canvas.getContext('2d');
+
+  const bpmSlider = document.getElementById('bpm-slider');
+  const flashlightSlider = document.getElementById('flashlight-slider');
+  const bpmDisplay = document.getElementById('bpm-display');
+  const flashlightDisplay = document.getElementById('flashlight-display');
+
+  let bpm = 120;
+  let flashlights = 10;
+  let dots = [];
+
+  bpmSlider.addEventListener('input', (e) => {
+    bpm = e.target.value;
+    bpmDisplay.textContent = bpm;
+  });
+
+  flashlightSlider.addEventListener('input', (e) => {
+    flashlights = e.target.value;
+    flashlightDisplay.textContent = flashlights;
+    initializeDots();
+  });
+
+  function initializeDots() {
+    dots = [];
+    for (let i = 0; i < flashlights; i++) {
+      dots.push({
+        x: 0,
+        y: 0,
+        radius: Math.random() * 3 + 2,
+        angle: 0,
+        centerX: Math.random() * canvas.width,
+        centerY: Math.random() * canvas.height,
+        motionRadius: Math.random() * 20 + 10,
+        direction: 1 // 1 for forward, -1 for backward
+      });
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const angularSpeed = (Math.PI) / (60 * (120 / bpm)); // Top half-circle motion
+
+    dots.forEach(dot => {
+      dot.angle += angularSpeed * dot.direction;
+
+      // Reverse direction at the end of the half-circle
+      if (dot.angle >= Math.PI || dot.angle <= 0) {
+        dot.direction *= -1;
+      }
+
+      dot.x = dot.centerX + dot.motionRadius * Math.cos(dot.angle);
+      dot.y = dot.centerY - dot.motionRadius * Math.sin(dot.angle);
+
+      ctx.beginPath();
+      ctx.arc(dot.x, dot.y, dot.radius, 0, 2 * Math.PI);
+      ctx.fillStyle = 'white';
+      ctx.fill();
+    });
+
+    requestAnimationFrame(draw);
+  }
+
+  initializeDots();
+  draw();
+</script>
+</body>
+</html>
