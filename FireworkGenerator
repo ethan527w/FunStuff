@@ -1,0 +1,391 @@
+/* Created by Gemini Pro 2.0 Nov 16 */
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fireworks Generator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden; /* Hide scrollbars */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+        canvas {
+            display: block;
+            background-color: #0a0a10; /* Dark night sky */
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+        /* Info box for instructions */
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #aaa;
+            z-index: 10;
+        }
+        /* New styles for the controls */
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 15px;
+            border-radius: 8px;
+            z-index: 10;
+            color: #aaa;
+            font-size: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        #controls label, #controls div {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #controls input[type="number"] {
+            width: 60px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background: #222;
+            color: #fff;
+            padding: 5px;
+            font-family: 'Inter', sans-serif;
+        }
+        #controls input[type="file"] {
+            font-size: 12px;
+            max-width: 200px;
+        }
+    </style>
+    <!-- Use Inter font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    
+    <div id="info">Click or Tap to launch a firework!</div>
+    <canvas id="fireworksCanvas"></canvas>
+
+    <!-- New Controls -->
+    <div id="controls">
+        <div>
+            <label for="bpmInput">Spotlight BPM:</label>
+            <input type="number" id="bpmInput" value="120" min="30" max="300">
+        </div>
+        <div>
+            <label for="musicUpload">BG Music:</label>
+            <input type="file" id="musicUpload" accept="audio/*">
+        </div>
+    </div>
+    <audio id="backgroundMusic" loop></audio>
+
+    <script>
+        const canvas = document.getElementById('fireworksCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // New DOM elements for controls
+        const bpmInput = document.getElementById('bpmInput');
+        const musicUpload = document.getElementById('musicUpload');
+        const backgroundMusic = document.getElementById('backgroundMusic');
+        
+        let fireworks = [];
+        let particles = [];
+        
+        // Gravity
+        const gravity = 0.03;
+        // Hue for colorful fireworks
+        let hue = 120;
+
+        /**
+         * Utility function to get a random number within a range.
+         * @param {number} min - The minimum value.
+         * @param {number} max - The maximum value.
+         * @returns {number} A random number between min and max.
+         */
+        function random(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+ 
+        /**
+         * Sets the canvas size and handles window resize events.
+         */
+        function setCanvasSize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        /**
+         * Represents a single particle (used for both rockets and explosions).
+         */
+        class Particle {
+            constructor(x, y, color, velocity) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.velocity = velocity;
+                this.alpha = 1; // Opacity
+                this.size = 2;
+                this.friction = 0.99; // Air resistance
+                this.lifespan = random(20, 100); // How long the particle lasts
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.beginPath();
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+                ctx.restore();
+            }
+
+            update() {
+                // Apply friction
+                this.velocity.x *= this.friction;
+                this.velocity.y *= this.friction;
+                
+                // Apply gravity
+                this.velocity.y += gravity;
+                
+                // Update position
+                this.x += this.velocity.x;
+                this.y += this.velocity.y;
+                
+                // Fade out
+                this.alpha -= 0.02;
+                
+                // Decrease lifespan (for rocket particles, not explosion)
+                this.lifespan--;
+            }
+        }
+
+        /**
+         * Represents a complete firework (rocket + explosion).
+         */
+        class Firework {
+            constructor(startX, startY, targetX, targetY) {
+                this.x = startX;
+                this.y = startY;
+                this.targetX = targetX;
+                this.targetY = targetY;
+                
+                this.color = `hsl(${hue}, 100%, 50%)`;
+                
+                // Calculate angle and velocity for the rocket
+                const angle = Math.atan2(targetY - startY, targetX - startX);
+                const speed = 10;
+                
+                this.rocket = new Particle(this.x, this.y, this.color, {
+                    x: Math.cos(angle) * speed,
+                    y: Math.sin(angle) * speed
+                });
+                
+                this.rocket.lifespan = random(100, 150); // Time to explosion
+                this.exploded = false;
+                this.explosionParticles = [];
+            }
+
+            explode() {
+                this.exploded = true;
+                const particleCount = 100;
+                const angleIncrement = (Math.PI * 2) / particleCount;
+                
+                for (let i = 0; i < particleCount; i++) {
+                    const speed = random(1, 4);
+                    const velocity = {
+                        x: Math.cos(angleIncrement * i) * speed * Math.random(),
+                        y: Math.sin(angleIncrement * i) * speed * Math.random()
+                    };
+                    
+                    // Use a slightly different shade for the explosion
+                    const explosionColor = `hsl(${hue}, 100%, ${random(50, 80)}%)`;
+                    this.explosionParticles.push(new Particle(this.rocket.x, this.rocket.y, explosionColor, velocity));
+                }
+            }
+
+            update() {
+                if (!this.exploded) {
+                    this.rocket.update();
+                    
+                    // Explode when rocket lifespan ends or it starts falling
+                    if (this.rocket.lifespan <= 0 || this.rocket.velocity.y >= 0) {
+                        this.explode();
+                    }
+                } else {
+                    for (let i = this.explosionParticles.length - 1; i >= 0; i--) {
+                        this.explosionParticles[i].update();
+                        if (this.explosionParticles[i].alpha <= 0) {
+                            this.explosionParticles.splice(i, 1);
+                        }
+                    }
+                }
+            }
+
+            draw() {
+                if (!this.exploded) {
+                    this.rocket.draw();
+                } else {
+                    this.explosionParticles.forEach(p => p.draw());
+                }
+            }
+        }
+
+        /**
+         * NEW: Draws a single waving spotlight beam.
+         * @param {number} baseX - The center X coordinate for the base of the light.
+         * @param {string} color - The color of the light.
+         * @param {number} oscillation - A value from -1 to 1 controlling the swing.
+         */
+        function drawSpotlightBeam(baseX, color, oscillation) {
+            const targetX = baseX + oscillation * (canvas.width / 3.5); // How far it swings
+            const beamWidth = 120; // Width at the base
+
+            ctx.save();
+            ctx.beginPath();
+            // Set a very low alpha to make it look like a subtle beam
+            ctx.globalAlpha = 0.05; 
+            ctx.fillStyle = color;
+            
+            ctx.moveTo(baseX - beamWidth / 2, canvas.height); // Base left
+            ctx.lineTo(baseX + beamWidth / 2, canvas.height); // Base right
+            ctx.lineTo(targetX, 0); // Target point at top
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore(); // Restore alpha
+        }
+
+        /**
+         * NEW: Draws all spotlights based on BPM.
+         */
+        function drawSpotlights() {
+            // Get BPM from input, default to 120 if invalid
+            const bpm = parseFloat(bpmInput.value) || 120;
+            // Calculate beats per second
+            const beatsPerSecond = bpm / 60;
+            // Get current time in seconds
+            const timestamp = Date.now() / 1000; 
+
+            // Calculate oscillation values (between -1 and 1) based on time and BPM
+            // We use different phase offsets (e.g., + Math.PI / 1.5) so they don't all move together
+            const osc1 = Math.sin(timestamp * beatsPerSecond * Math.PI);
+            const osc2 = Math.sin(timestamp * beatsPerSecond * Math.PI + Math.PI / 1.5);
+            const osc3 = Math.sin(timestamp * beatsPerSecond * Math.PI + Math.PI / 3);
+
+            // Draw three beams
+            drawSpotlightBeam(canvas.width * 0.25, 'rgba(255, 255, 220, 1)', osc1);
+            drawSpotlightBeam(canvas.width * 0.5, 'rgba(220, 255, 255, 1)', osc2);
+            drawSpotlightBeam(canvas.width * 0.75, 'rgba(255, 220, 255, 1)', osc3);
+        }
+
+        /**
+         * The main animation loop.
+         */
+        function animate() {
+            // Use requestAnimationFrame for smooth animation
+            requestAnimationFrame(animate);
+            
+            // Increment hue to cycle colors
+            hue = (hue + 1) % 360;
+            
+            // Clear the canvas with a low-opacity black to create motion trails
+            ctx.globalAlpha = 0.1;
+            ctx.fillStyle = '#0a0a10';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Reset alpha
+            ctx.globalAlpha = 1;
+
+            // NEW: Draw the spotlights
+            drawSpotlights();
+
+            // Automatically launch a firework randomly
+            if (Math.random() < 0.05) { // 5% chance each frame
+                launchFirework(
+                    canvas.width / 2, // Start from bottom center
+                    canvas.height,
+                    random(0, canvas.width), // Target a random X position
+                    random(0, canvas.height / 2) // Target the top half of the screen
+                );
+            }
+
+            // Update and draw all fireworks
+            for (let i = fireworks.length - 1; i >= 0; i--) {
+                fireworks[i].draw();
+                fireworks[i].update();
+                
+                // Remove the firework if it has exploded and all its particles are gone
+                if (fireworks[i].exploded && fireworks[i].explosionParticles.length === 0) {
+                    fireworks.splice(i, 1);
+                }
+            }
+        }
+
+        /**
+         * Launches a new firework.
+         * @param {number} startX - The starting X coordinate.
+         * @param {number} startY - The starting Y coordinate.
+         * @param {number} targetX - The target X coordinate for the explosion.
+         * @param {number} targetY - The target Y coordinate for the explosion.
+         */
+        function launchFirework(startX, startY, targetX, targetY) {
+            fireworks.push(new Firework(startX, startY, targetX, targetY));
+        }
+
+        // --- Event Listeners ---
+
+        // Handle window resize
+        window.addEventListener('resize', setCanvasSize);
+
+        // Handle click/tap to launch a firework
+        function handleInteraction(e) {
+            // Use e.touches if it's a touch event
+            const x = e.touches ? e.touches[0].clientX : e.clientX;
+            const y = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            // Launch from the bottom center to the clicked/tapped point
+            launchFirework(canvas.width / 2, canvas.height, x, y);
+        }
+ 
+        canvas.addEventListener('click', handleInteraction);
+        canvas.addEventListener('touchstart', handleInteraction, { passive: true });
+
+        // NEW: Handle music upload
+        musicUpload.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                // Create a URL for the local file
+                const objectUrl = URL.createObjectURL(file);
+                backgroundMusic.src = objectUrl;
+                // Play the music
+                backgroundMusic.play()
+                    .catch(err => console.error("Audio playback failed. User may need to interact first.", err));
+            }
+        });
+
+        // --- Initialization ---
+        
+        // Set initial canvas size
+        setCanvasSize();
+        
+        // Start the animation
+        animate();
+        
+    </script>
+</body>
+</html>
